@@ -57,6 +57,7 @@ function parseResults(html: string, sourceUrl: string): F1Results | undefined {
   const rows = [...table.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)]
     .map((match) => [...match[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)].map((cell) => clean(cell[1])).filter(Boolean))
     .filter((row) => row.length > 0);
+  if (rows.some((row) => row.join(' ').toLowerCase().includes('no results available'))) return undefined;
   return headers.length > 0 && rows.length > 0 ? { headers, rows, sourceUrl } : undefined;
 }
 
