@@ -18,7 +18,7 @@ export type CalendarPayload = {
 };
 
 const YEAR = 2026;
-const F1_SOURCE = 'https://www.formula1.com/en/latest/article/formula-1-reveals-calendar-for-2026-season.YctbMZWqBvrgyddrnauo8';
+const F1_SOURCE = 'https://www.formula1.com/en/racing/' + YEAR;
 const WEC_SOURCE = 'https://www.fiawec.com/en/season/' + YEAR;
 const fallback: Race[] = [
   { series: 'F1', date: 'SEP 04–06', day: '06', name: 'Italian Grand Prix', circuit: 'Monza', country: 'Italy', time: '22:00', accent: 'red', sourceUrl: F1_SOURCE },
@@ -40,22 +40,47 @@ const circuits: Record<string, string> = {
   '6-hours-of-barcelona': 'Circuit de Barcelona-Catalunya', '6-hours-of-monza': 'Monza',
 };
 
+const f1CircuitByScheduleSlug: Record<string, string> = {
+  australia: 'Albert Park', china: 'Shanghai', japan: 'Suzuka', miami: 'Miami International Autodrome', canada: 'Circuit Gilles-Villeneuve',
+  monaco: 'Monaco', 'barcelona-catalunya': 'Circuit de Barcelona-Catalunya', austria: 'Spielberg', 'great-britain': 'Silverstone',
+  belgium: 'Spa-Francorchamps', hungary: 'Hungaroring', netherlands: 'Zandvoort', italy: 'Monza', spain: 'Madrid',
+  azerbaijan: 'Baku City Circuit', bahrain: 'Sakhir', singapore: 'Marina Bay', 'united-states': 'Circuit of the Americas',
+  mexico: 'Autódromo Hermanos Rodríguez', brazil: 'Interlagos', 'las-vegas': 'Las Vegas Strip Circuit', qatar: 'Lusail', 'abu-dhabi': 'Yas Marina',
+};
+
 const months: Record<string, string> = { jan: 'JAN', feb: 'FEB', mar: 'MAR', apr: 'APR', may: 'MAY', jun: 'JUN', jul: 'JUL', aug: 'AUG', sep: 'SEP', oct: 'OCT', nov: 'NOV', dec: 'DEC' };
 const clean = (value: string) => value.replace(/<[^>]+>/g, ' ').replace(/&[a-z#0-9]+;/gi, ' ').replace(/\s+/g, ' ').trim();
 const titleFromSlug = (slug: string) => slug.replace(/-\d{4}$/, '').split('-').map((word) => word === 'of' ? word : word[0].toUpperCase() + word.slice(1)).join(' ');
 
 function parseF1(html: string): Race[] {
-  const table = html.match(/<table[\s\S]*?<\/table>/i)?.[0] ?? '';
-  return [...table.matchAll(/<tr[\s\S]*?<\/tr>/gi)].flatMap((row) => {
-    const cells = [...row[0].matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi)].map((cell) => clean(cell[1]));
-    if (cells.length < 3 || !/Grand Prix/i.test(cells.join(' '))) return [];
-    const match = cells[0].match(/([A-Za-z]+)\s+(\d{1,2})\s*[-–]\s*(\d{1,2})/);
-    if (!match) return [];
-    const month = months[match[1].slice(0, 3).toLowerCase()];
-    const day = match[3].padStart(2, '0');
-    const country = cells[1];
-    const slug = country.toLowerCase().replace(/[^a-z]+/g, '-') + '-grand-prix';
-    return [{ series: 'F1', date: month + ' ' + match[2].padStart(2, '0') + '–' + day, day, name: (country === 'USA' ? 'United States' : country) + ' Grand Prix', circuit: circuits[slug] ?? cells[2].replace(/\s*\(.*\)/, ''), country, time: 'TBA', accent: 'red', sourceUrl: F1_SOURCE }];
+  const eventPattern = new RegExp('href=["\\\'](?:https?:\\/\\/www\\.formula1\\.com)?\\/en\\/racing\\/' + YEAR + '\\/([^"\\\/?#]+)[^"\\\']*["\\\']', 'gi');
+  const matches = [...html.matchAll(eventPattern)];
+  const seen = new Set<string>();
+
+  return matches.flatMap((match, index) => {
+    const slug = match[1].toLowerCase();
+    if (seen.has(slug) || slug === String(YEAR)) return [];
+    const section = html.slice(match.index, matches[index + 1]?.index ?? match.index + 2600);
+    const text = clean(section);
+    const date = text.match(/(\d{1,2})\s*[-–]\s*(\d{1,2})\s*(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b/i);
+    if (!date) return [];
+    const month = months[date[3].toLowerCase()];
+    if (!month) return [];
+
+    seen.add(slug);
+    const country = titleFromSlug(slug);
+    const finalDay = date[2].padStart(2, '0');
+    return [{
+      series: 'F1',
+      date: month + ' ' + date[1].padStart(2, '0') + '–' + finalDay,
+      day: finalDay,
+      name: country + ' Grand Prix',
+      circuit: f1CircuitByScheduleSlug[slug] ?? country,
+      country,
+      time: 'TBA',
+      accent: 'red',
+      sourceUrl: F1_SOURCE,
+    }];
   });
 }
 
