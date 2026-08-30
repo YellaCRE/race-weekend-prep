@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { addDays, differenceInCalendarDays, endOfWeek, isAfter, min, startOfDay } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { CalendarDays, ChevronRight, Clock3, Flag, Gauge, MapPin, Plus, TimerReset, Trophy, X } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
@@ -20,7 +21,6 @@ const seedLaps: Lap[] = [
 ];
 const parseTime = (value: string) => { const [min, sec] = value.split(':'); return Number(min) * 60 + Number(sec); };
 const monthIndex: Record<string, number> = { JAN: 0, FEB: 1, MAR: 2, APR: 3, MAY: 4, JUN: 5, JUL: 6, AUG: 7, SEP: 8, OCT: 9, NOV: 10, DEC: 11 };
-const startOfDay = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate());
 const dateKey = (date: Date) => date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
 const raceSlug = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 function raceDateRange(race: Race) {
@@ -56,14 +56,23 @@ export default function Home() {
   }, [races]);
   const filteredRaces = upcomingRaces.filter(({ race }) => series === 'ALL' || race.series === series);
   const racesByDay = useMemo(() => {
-    const days = new Map<string, { race: Race; isStart: boolean }>();
+    const days = new Map<string, Race>();
     filteredRaces.forEach(({ race, range }) => {
-      for (const day = new Date(range.start); day <= range.end; day.setDate(day.getDate() + 1)) days.set(dateKey(day), { race, isStart: dateKey(day) === dateKey(range.start) });
+      for (let day = range.start; !isAfter(day, range.end); day = addDays(day, 1)) days.set(dateKey(day), race);
     });
     return days;
   }, [filteredRaces]);
-  const f1RaceDays = useMemo(() => [...racesByDay.entries()].filter(([, entry]) => entry.race.series === 'F1').map(([day]) => new Date(day + 'T00:00:00')), [racesByDay]);
-  const wecRaceDays = useMemo(() => [...racesByDay.entries()].filter(([, entry]) => entry.race.series === 'WEC').map(([day]) => new Date(day + 'T00:00:00')), [racesByDay]);
+  const raceBanners = useMemo(() => {
+    const banners = new Map<string, { race: Race; span: number }>();
+    filteredRaces.forEach(({ race, range }) => {
+      for (let start = range.start; !isAfter(start, range.end);) {
+        const end = min([range.end, endOfWeek(start)]);
+        banners.set(dateKey(start), { race, span: differenceInCalendarDays(end, start) + 1 });
+        start = addDays(end, 1);
+      }
+    });
+    return banners;
+  }, [filteredRaces]);
   const bestLap = useMemo(() => [...laps.filter((lap) => lap.circuit === 'Spa-Francorchamps' && lap.car === 'Ferrari 499P')].sort((a, b) => parseTime(a.time) - parseTime(b.time))[0], [laps]);
   function saveLap(formData: FormData) {
     const newLap: Lap = { id: Date.now(), circuit: String(formData.get('circuit')), car: String(formData.get('car')), game: String(formData.get('game')), time: String(formData.get('time')), date: new Date().toLocaleDateString('ko-KR'), note: String(formData.get('note') || '주행 조건 미입력') };
@@ -72,7 +81,7 @@ export default function Home() {
   return <main>
     <nav className="topbar"><a className="brand" href="#top" aria-label="Race Weekend Prep 홈"><span>RACE WEEKEND</span> PREP</a><div className="navlinks"><a href="#calendar">캘린더</a><a href="#circuit">서킷</a><a href="#laps">내 기록</a></div><button className="profile" onClick={() => setIsFormOpen(true)}><Plus size={15} /> 랩타임 추가</button></nav>
     <section id="top" className="hero"><img src="/spa-hero.png" alt="숲을 가로지르는 레이스 서킷" /><div className="hero-shade" /><div className="hero-content"><p className="eyebrow"><span className="live-dot" /> 2026 SEASON · KST</p><h1>RACE WEEKEND,<br /><em>PREP YOUR LAP.</em></h1><p className="hero-copy">F1과 WEC의 순간을 앞두고,<br />당신의 가장 빠른 랩으로 먼저 준비하세요.</p><div className="next-race"><span className="series-pill">F1</span><div><b>ITALIAN GRAND PRIX</b><small>MONZA · 6 SEP, 22:00</small></div><ChevronRight size={20} /></div></div><div className="hero-stats"><div><strong>07</strong><span>DAYS TO GO</span></div><div><strong>2:18.642</strong><span>SPA PERSONAL BEST</span></div></div></section>
-    <section id="calendar" className="section calendar-section"><div className="section-heading"><div><p className="eyebrow dark"><CalendarDays size={14} /> RACE CALENDAR</p><h2>다가오는 레이스</h2><p className="sync-status">{calendarStatus} · KST 기준 · {filteredRaces.length}개 레이스 주말</p></div><div className="filter" aria-label="시리즈 필터">{(['ALL', 'F1', 'WEC'] as const).map((item) => <button key={item} className={series === item ? 'selected' : ''} onClick={() => setSeries(item)}>{item === 'ALL' ? '전체' : item}</button>)}</div></div><div className="calendar-frame"><Calendar month={calendarMonth} onMonthChange={setCalendarMonth} locale={ko} showOutsideDays fixedWeeks className="calendar-library w-full" classNames={{ root: 'w-full', months: 'w-full', month: 'w-full', month_grid: 'w-full', weekday: 'calendar-library-weekday', day: 'calendar-library-day' }} modifiers={{ f1: f1RaceDays, wec: wecRaceDays }} modifiersClassNames={{ f1: 'race-f1', wec: 'race-wec' }} dayContent={(day) => { const entry = racesByDay.get(dateKey(day)); return <><span>{day.getDate()}</span>{entry?.isStart && <small className="race-day-label">{entry.race.name}</small>}</>; }} onDayClick={(day) => { const entry = racesByDay.get(dateKey(day)); if (entry) window.location.assign('/race/' + raceSlug(entry.race.name)); }} /></div>{filteredRaces.length === 0 && <p className="calendar-empty">향후 30일 안에 예정된 {series === 'ALL' ? '' : series + ' '}레이스가 없습니다.</p>}</section>
+    <section id="calendar" className="section calendar-section"><div className="section-heading"><div><p className="eyebrow dark"><CalendarDays size={14} /> RACE CALENDAR</p><h2>다가오는 레이스</h2><p className="sync-status">{calendarStatus} · KST 기준 · {filteredRaces.length}개 레이스 주말</p></div><div className="filter" aria-label="시리즈 필터">{(['ALL', 'F1', 'WEC'] as const).map((item) => <button key={item} className={series === item ? 'selected' : ''} onClick={() => setSeries(item)}>{item === 'ALL' ? '전체' : item}</button>)}</div></div><div className="calendar-frame"><Calendar month={calendarMonth} onMonthChange={setCalendarMonth} locale={ko} showOutsideDays fixedWeeks className="calendar-library w-full" classNames={{ root: 'w-full', months: 'w-full', month: 'w-full', month_grid: 'w-full', weekday: 'calendar-library-weekday', day: 'calendar-library-day' }} dayContent={(day) => { const banner = raceBanners.get(dateKey(day)); return <><span>{day.getDate()}</span>{banner && <span className={'race-day-banner ' + banner.race.accent} style={{ width: `calc(${banner.span * 100}% + ${banner.span - 1}px)` } as CSSProperties}><b>{banner.race.name}</b><small>{banner.race.circuit} · {banner.race.country}</small></span>}</>; }} onDayClick={(day) => { const race = racesByDay.get(dateKey(day)); if (race) window.location.assign('/race/' + raceSlug(race.name)); }} /></div>{filteredRaces.length === 0 && <p className="calendar-empty">향후 30일 안에 예정된 {series === 'ALL' ? '' : series + ' '}레이스가 없습니다.</p>}</section>
     <section id="circuit" className="section circuit-section"><div className="circuit-copy"><p className="eyebrow dark"><Flag size={14} /> FEATURED CIRCUIT</p><h2>Spa-<br />Francorchamps</h2><p>아르덴 숲을 가로지르는 7.004km. 고저차와 빠른 코너가 만들어내는, 레이싱의 가장 순수한 리듬.</p><div className="track-metrics"><div><b>7.004</b><span>KM LENGTH</span></div><div><b>19</b><span>CORNERS</span></div><div><b>102m</b><span>ELEVATION</span></div></div><button className="text-button">서킷 프로필 보기 <ChevronRight size={16} /></button></div><div className="track-panel"><div className="track-glow" /><div className="track-line"><span className="t1">01</span><span className="t2">07</span><span className="t3">12</span><span className="t4">18</span></div><p>SPA-FRANCORCHAMPS · BELGIUM</p></div></section>
     <section id="laps" className="section lap-section"><div className="section-heading"><div><p className="eyebrow dark"><TimerReset size={14} /> SIM RACING LOG</p><h2>나의 랩타임</h2></div><button className="dark-button" onClick={() => setIsFormOpen(true)}><Plus size={16} /> 기록 추가</button></div><div className="lap-layout"><div className="pb-card"><div className="pb-top"><span>PERSONAL BEST</span><Trophy size={20} /></div><h3>{bestLap?.time ?? '—'}</h3><p>SPA-FRANCORCHAMPS · FERRARI 499P</p><div className="pb-footer"><span><Gauge size={14} /> LMU · DRY</span><span className="improvement">▲ 0.462</span></div></div><div className="lap-list">{laps.slice(0, 4).map((lap, index) => <article className="lap-row" key={lap.id}><span className="rank">{String(index + 1).padStart(2, '0')}</span><div><b>{lap.circuit}</b><p>{lap.car} · {lap.game}</p></div><div className="lap-time"><strong>{lap.time}</strong><small>{lap.date}</small></div></article>)}</div></div></section>
     <footer>RACE WEEKEND PREP <span>PREP THE TRACK. OWN THE WEEKEND.</span></footer>
