@@ -1,3 +1,9 @@
+export type CalendarSession = {
+  name: 'Practice 1' | 'Practice 2' | 'Practice 3' | 'Qualifying' | 'Race';
+  startsAt: string;
+  time: string;
+};
+
 export type Race = {
   series: 'F1' | 'WEC';
   date: string;
@@ -8,6 +14,7 @@ export type Race = {
   time: string;
   accent: 'red' | 'gold';
   sourceUrl: string;
+  sessions?: CalendarSession[];
 };
 
 export type CalendarPayload = {
@@ -109,27 +116,37 @@ function localTimeToKst(year: number, month: number, day: number, hour: number, 
     const displayed = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second);
     instant += wanted - displayed;
   }
-  return new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(instant));
+  const kst = getTimeParts(new Date(instant), 'Asia/Seoul');
+  return {
+    startsAt: String(kst.year).padStart(4, '0') + '-' + String(kst.month).padStart(2, '0') + '-' + String(kst.day).padStart(2, '0') + 'T' + String(kst.hour).padStart(2, '0') + ':' + String(kst.minute).padStart(2, '0') + ':00+09:00',
+    time: String(kst.hour).padStart(2, '0') + ':' + String(kst.minute).padStart(2, '0'),
+  };
 }
 
-function parseF1RaceTime(html: string, timezone: string): string | null {
+function parseF1Sessions(html: string, timezone: string): CalendarSession[] {
   const text = clean(html);
-  const race = text.match(/(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+Race\s+(\d{1,2}):(\d{2})\b/i);
-  if (!race) return null;
-  const month = Object.keys(months).indexOf(race[2].toLowerCase()) + 1;
-  if (!month) return null;
-  return localTimeToKst(YEAR, month, Number(race[1]), Number(race[3]), Number(race[4]), timezone);
+  const pattern = /(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(Practice\s+[123]|Qualifying|Race)\s+(\d{1,2}):(\d{2})\b/gi;
+  const names = new Set<CalendarSession['name']>();
+  return [...text.matchAll(pattern)].flatMap((match) => {
+    const name = match[3].replace(/\s+/g, ' ') as CalendarSession['name'];
+    const month = Object.keys(months).indexOf(match[2].toLowerCase()) + 1;
+    if (!month || names.has(name)) return [];
+    names.add(name);
+    const kst = localTimeToKst(YEAR, month, Number(match[1]), Number(match[4]), Number(match[5]), timezone);
+    return [{ name, ...kst }];
+  });
 }
 
-async function addF1RaceTimes(races: F1ScheduleRace[]): Promise<Race[]> {
+async function addF1SessionTimes(races: F1ScheduleRace[]): Promise<Race[]> {
   const results = await Promise.all(races.map(async (race) => {
     const timezone = f1TimezoneByScheduleSlug[race.scheduleSlug];
     if (!timezone) return race;
     try {
       const response = await fetch(race.scheduleUrl);
       if (!response.ok) return race;
-      const time = parseF1RaceTime(await response.text(), timezone);
-      return time ? { ...race, time } : race;
+      const sessions = parseF1Sessions(await response.text(), timezone);
+      const raceSession = sessions.find((session) => session.name === 'Race');
+      return sessions.length > 0 ? { ...race, sessions, time: raceSession?.time ?? race.time } : race;
     } catch {
       return race;
     }
@@ -158,7 +175,7 @@ export async function getOfficialCalendar(force = false): Promise<CalendarPayloa
   try {
     const [f1Response, wecResponse] = await Promise.all([fetch(F1_SOURCE), fetch(WEC_SOURCE)]);
     const [f1Html, wecHtml] = await Promise.all([f1Response.text(), wecResponse.text()]);
-    const f1Races = await addF1RaceTimes(parseF1(f1Html));
+    const f1Races = await addF1SessionTimes(parseF1(f1Html));
     const races = [...f1Races, ...parseWec(wecHtml)];
     const value: CalendarPayload = { races: races.length >= 8 ? races : fallback, updatedAt: new Date().toISOString(), sources: { F1: F1_SOURCE, WEC: WEC_SOURCE }, mode: races.length >= 8 ? 'official-sync' : 'fallback' };
     cached = { value, expires: Date.now() + 1000 * 60 * 60 * 24 };
