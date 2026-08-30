@@ -25,11 +25,9 @@ function Calendar({
   locale,
   formatters,
   components,
-  dayContent,
   ...props
 }: React.ComponentProps<typeof DayPicker> & {
   buttonVariant?: React.ComponentProps<typeof Button>['variant'];
-  dayContent?: (date: Date) => React.ReactNode;
 }) {
   const defaultClassNames = getDefaultClassNames();
 
@@ -174,7 +172,7 @@ function Calendar({
           );
         },
         DayButton: ({ ...props }) => (
-          <CalendarDayButton locale={locale} dayContent={dayContent} {...props} />
+          <CalendarDayButton locale={locale} {...props} />
         ),
         WeekNumber: ({ children, ...props }) => {
           return (
@@ -197,13 +195,8 @@ function CalendarDayButton({
   day,
   modifiers,
   locale,
-  dayContent,
-  children,
   ...props
-}: React.ComponentProps<typeof DayButton> & {
-  locale?: Partial<Locale>;
-  dayContent?: (date: Date) => React.ReactNode;
-}) {
+}: React.ComponentProps<typeof DayButton> & { locale?: Partial<Locale> }) {
   const defaultClassNames = getDefaultClassNames();
 
   const ref = React.useRef<HTMLButtonElement>(null);
@@ -231,9 +224,7 @@ function CalendarDayButton({
         className,
       )}
       {...props}
-    >
-      {dayContent?.(day.date) ?? children}
-    </Button>
+    />
   );
 }
 
