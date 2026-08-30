@@ -36,6 +36,24 @@ function firstMatch(html: string, expression: RegExp) {
   return expression.exec(html)?.[1];
 }
 
+function durationToMilliseconds(value: string) {
+  const parts = value.replace(/[+s]/g, '').split(':').map(Number);
+  if (parts.some(Number.isNaN)) return undefined;
+  const seconds = parts.pop();
+  if (seconds === undefined) return undefined;
+  const minutes = parts.pop() ?? 0;
+  const hours = parts.pop() ?? 0;
+  return Math.round((hours * 60 * 60 + minutes * 60 + seconds) * 1000);
+}
+
+function formatDuration(milliseconds: number) {
+  const hours = Math.floor(milliseconds / 3_600_000);
+  const minutes = Math.floor(milliseconds % 3_600_000 / 60_000);
+  const seconds = Math.floor(milliseconds % 60_000 / 1000);
+  const fraction = String(milliseconds % 1000).padStart(3, '0');
+  return hours + ':' + String(minutes).padStart(2, '0') + ':' + String(seconds).padStart(2, '0') + '.' + fraction;
+}
+
 function parseCircuit(html: string, sourceUrl: string): F1Circuit | undefined {
   const circuitStart = html.indexOf('>Circuit<');
   if (circuitStart < 0) return undefined;
@@ -66,6 +84,16 @@ function parseResults(html: string, sourceUrl: string): F1Results | undefined {
     })
     .filter((row) => row.cells.length > 0);
   if (rows.some((row) => row.cells.join(' ').toLowerCase().includes('no results available'))) return undefined;
+  const timeIndex = headers.findIndex((header) => header === 'Time / Retired');
+  const leaderTime = timeIndex >= 0 ? durationToMilliseconds(rows[0]?.cells[timeIndex] ?? '') : undefined;
+  if (leaderTime !== undefined) {
+    for (const row of rows) {
+      const officialTime = row.cells[timeIndex];
+      const gap = durationToMilliseconds(officialTime ?? '');
+      if (!officialTime || gap === undefined) continue;
+      row.cells[timeIndex] = officialTime.startsWith('+') ? formatDuration(leaderTime + gap) + ' · ' + officialTime : officialTime + ' · LEADER';
+    }
+  }
   return headers.length > 0 && rows.length > 0 ? { headers, rows, sourceUrl } : undefined;
 }
 
