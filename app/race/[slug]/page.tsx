@@ -1,6 +1,9 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { format } from 'date-fns';
+import { ko } from 'date-fns/locale';
+import { TZDate } from '@date-fns/tz';
 import { ArrowLeft, CalendarDays, Clock3, MapPin } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import type { CalendarPayload, CalendarSession, Race } from '@/lib/calendar-sync';
@@ -23,5 +26,5 @@ export default function RaceDetailPage() {
   if (loading) return <main className="race-detail loading"><p>공식 일정 불러오는 중</p></main>;
   if (!race) return <main className="race-detail loading"><p>레이스 정보를 찾을 수 없습니다.</p><a href="/#calendar">캘린더로 돌아가기</a></main>;
 
-  return <main className="race-detail"><header className="detail-topbar"><a href="/#calendar"><ArrowLeft size={17} /> 캘린더</a><span>RACE WEEKEND PREP</span></header><section className="detail-hero"><p className="eyebrow"><CalendarDays size={14} /> {race.series} RACE WEEKEND · KST</p><h1>{race.name}</h1><p className="detail-date">{race.date} · {race.country}</p><p className="detail-circuit"><MapPin size={16} /> {race.circuit}</p></section><section className="detail-schedule"><div><p className="eyebrow dark"><Clock3 size={14} /> WEEKEND SCHEDULE</p><h2>상세 일정</h2></div>{sessions.length > 0 ? <div className="session-list">{sessions.map((session) => <article className="session-row" key={session.name}><span className="session-name">{session.name}</span><div><b>{new Date(session.startsAt).toLocaleDateString('ko-KR', { weekday: 'short', month: 'long', day: 'numeric' })}</b><strong>{session.time} <small>KST</small></strong></div></article>)}</div> : <p className="session-empty">공식 세션 시간은 확정되는 대로 표시됩니다.</p>}</section></main>;
+  return <main className="race-detail"><header className="detail-topbar"><a href="/#calendar"><ArrowLeft size={17} /> 캘린더</a><span>RACE WEEKEND PREP</span></header><section className="detail-hero"><p className="eyebrow"><CalendarDays size={14} /> {race.series} RACE WEEKEND · KST</p><h1>{race.name}</h1><p className="detail-date">{race.date} · {race.country}</p><p className="detail-circuit"><MapPin size={16} /> {race.circuit}</p></section><section className="detail-schedule"><div><p className="eyebrow dark"><Clock3 size={14} /> WEEKEND SCHEDULE</p><h2>상세 일정</h2></div>{sessions.length > 0 ? <div className="session-list">{sessions.map((session) => <article className="session-row" key={session.name}><span className="session-name">{session.name}</span><div><b>{format(TZDate.tz('Asia/Seoul', session.startsAt), 'M월 d일 (EEE)', { locale: ko })}</b><strong>{session.time} <small>KST</small></strong></div></article>)}</div> : <p className="session-empty">공식 세션 시간은 확정되는 대로 표시됩니다.</p>}</section></main>;
 }
