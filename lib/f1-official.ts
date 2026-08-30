@@ -10,7 +10,7 @@ export type F1Circuit = {
 
 export type F1Results = {
   headers: string[];
-  rows: string[][];
+  rows: Array<{ cells: string[]; driverImageUrl?: string }>;
   sourceUrl: string;
 };
 
@@ -54,10 +54,18 @@ function parseResults(html: string, sourceUrl: string): F1Results | undefined {
   const table = tables.sort((left, right) => (right.match(/<tr/gi)?.length ?? 0) - (left.match(/<tr/gi)?.length ?? 0))[0];
   if (!table) return undefined;
   const headers = [...table.matchAll(/<th[^>]*>([\s\S]*?)<\/th>/gi)].map((match) => clean(match[1])).filter(Boolean);
+  const driverIndex = headers.findIndex((header) => header.toLowerCase() === 'driver');
   const rows = [...table.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)]
-    .map((match) => [...match[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)].map((cell) => clean(cell[1])).filter(Boolean))
-    .filter((row) => row.length > 0);
-  if (rows.some((row) => row.join(' ').toLowerCase().includes('no results available'))) return undefined;
+    .map((match) => {
+      const cells = [...match[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)].map((cell) => cell[1]);
+      const driverCell = cells[driverIndex] ?? '';
+      const driverImageUrl = firstMatch(driverCell, /<img[^>]+src="([^"]+)"/i);
+      const values = cells.map(clean).filter(Boolean);
+      if (driverIndex >= 0 && values[driverIndex]) values[driverIndex] = values[driverIndex].replace(/\s+[A-Z]{3}$/, '');
+      return { cells: values, driverImageUrl };
+    })
+    .filter((row) => row.cells.length > 0);
+  if (rows.some((row) => row.cells.join(' ').toLowerCase().includes('no results available'))) return undefined;
   return headers.length > 0 && rows.length > 0 ? { headers, rows, sourceUrl } : undefined;
 }
 
