@@ -36,6 +36,11 @@ function firstMatch(html: string, expression: RegExp) {
   return expression.exec(html)?.[1];
 }
 
+function transparentDriverImage(imageUrl: string | undefined) {
+  const originalPath = imageUrl?.match(/\/(v\d+\/.*)$/)?.[1];
+  return originalPath ? 'https://media.formula1.com/image/upload/c_fit,h_96/q_auto/' + originalPath : imageUrl;
+}
+
 function parseCircuit(html: string, sourceUrl: string): F1Circuit | undefined {
   const circuitStart = html.indexOf('>Circuit<');
   if (circuitStart < 0) return undefined;
@@ -59,7 +64,7 @@ function parseResults(html: string, sourceUrl: string): F1Results | undefined {
     .map((match) => {
       const cells = [...match[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)].map((cell) => cell[1]);
       const driverCell = cells[driverIndex] ?? '';
-      const driverImageUrl = firstMatch(driverCell, /<img[^>]+src="([^"]+)"/i);
+      const driverImageUrl = transparentDriverImage(firstMatch(driverCell, /<img[^>]+src="([^"]+)"/i));
       const values = cells.map(clean).filter(Boolean);
       if (driverIndex >= 0 && values[driverIndex]) values[driverIndex] = values[driverIndex].replace(/\s+[A-Z]{3}$/, '');
       return { cells: values, driverImageUrl };
