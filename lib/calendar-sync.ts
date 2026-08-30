@@ -1,5 +1,5 @@
 export type CalendarSession = {
-  name: 'Practice 1' | 'Practice 2' | 'Practice 3' | 'Qualifying' | 'Race';
+  name: 'Practice 1' | 'Practice 2' | 'Practice 3' | 'Sprint Qualifying' | 'Sprint' | 'Qualifying' | 'Race';
   startsAt: string;
   time: string;
 };
@@ -125,7 +125,7 @@ function localTimeToKst(year: number, month: number, day: number, hour: number, 
 
 function parseF1Sessions(html: string, timezone: string): CalendarSession[] {
   const text = clean(html);
-  const pattern = /(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(Practice\s+[123]|Qualifying|Race)\s+(\d{1,2}):(\d{2})\b/gi;
+  const pattern = /(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(Practice\s+[123]|Sprint\s+Qualifying|Sprint|Qualifying|Race)\s+(\d{1,2}):(\d{2})\b/gi;
   const names = new Set<CalendarSession['name']>();
   return [...text.matchAll(pattern)].flatMap((match) => {
     const name = match[3].replace(/\s+/g, ' ') as CalendarSession['name'];
