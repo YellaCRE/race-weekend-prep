@@ -123,10 +123,28 @@ function localTimeToKst(year: number, month: number, day: number, hour: number, 
   };
 }
 
+function instantToKst(startsAt: string) {
+  const kst = getTimeParts(new Date(startsAt), 'Asia/Seoul');
+  return {
+    startsAt: String(kst.year).padStart(4, '0') + '-' + String(kst.month).padStart(2, '0') + '-' + String(kst.day).padStart(2, '0') + 'T' + String(kst.hour).padStart(2, '0') + ':' + String(kst.minute).padStart(2, '0') + ':00+09:00',
+    time: String(kst.hour).padStart(2, '0') + ':' + String(kst.minute).padStart(2, '0'),
+  };
+}
+
 function parseF1Sessions(html: string, timezone: string): CalendarSession[] {
+  const names = new Set<CalendarSession['name']>();
+  const structuredSchedule = html.replace(/\\"/g, '"');
+  const structuredPattern = /"description":"(Practice\s+[123]|Sprint\s+Qualifying|Sprint|Qualifying|Race)","startTime":"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})","endTime":"[^"]*","gmtOffset":"([+-]\d{2}:\d{2})"/gi;
+  const structuredSessions = [...structuredSchedule.matchAll(structuredPattern)].flatMap((match) => {
+    const name = match[1].replace(/\s+/g, ' ') as CalendarSession['name'];
+    if (names.has(name)) return [];
+    names.add(name);
+    return [{ name, ...instantToKst(match[2] + match[3]) }];
+  });
+  if (structuredSessions.length > 0) return structuredSessions;
+
   const text = clean(html);
   const pattern = /(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(Practice\s+[123]|Sprint\s+Qualifying|Sprint|Qualifying|Race)\s+(\d{1,2}):(\d{2})\b/gi;
-  const names = new Set<CalendarSession['name']>();
   return [...text.matchAll(pattern)].flatMap((match) => {
     const name = match[3].replace(/\s+/g, ' ') as CalendarSession['name'];
     const month = Object.keys(months).indexOf(match[2].toLowerCase()) + 1;
