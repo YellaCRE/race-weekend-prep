@@ -17,6 +17,15 @@ const seedLaps: Lap[] = [
   { id: 3, circuit: 'Suzuka', car: 'McLaren MCL39', game: 'F1 2025', time: '1:29.387', date: '2026.08.14', note: 'Clear · Soft' },
 ];
 const parseTime = (value: string) => { const [min, sec] = value.split(':'); return Number(min) * 60 + Number(sec); };
+const monthIndex: Record<string, number> = { JAN: 0, FEB: 1, MAR: 2, APR: 3, MAY: 4, JUN: 5, JUL: 6, AUG: 7, SEP: 8, OCT: 9, NOV: 10, DEC: 11 };
+const weekdayLabels = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
+const startOfDay = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate());
+const dateKey = (date: Date) => date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
+function raceStartDate(race: Race) {
+  const match = race.date.match(/([A-Z]{3})\s+(\d{1,2})/);
+  if (!match) return null;
+  return new Date(new Date().getFullYear(), monthIndex[match[1]], Number(match[2]));
+}
 
 export default function Home() {
   const [series, setSeries] = useState<'ALL' | 'F1' | 'WEC'>('ALL');
@@ -33,7 +42,21 @@ export default function Home() {
       setCalendarStatus(payload.mode === 'official-sync' ? '공식 일정 동기화됨' : '공식 일정 캐시');
     }).catch(() => setCalendarStatus('저장된 일정 표시 중'));
   }, []);
-  const filteredRaces = races.filter((race) => series === 'ALL' || race.series === series);
+  const upcomingRaces = useMemo(() => {
+    const today = startOfDay(new Date());
+    const limit = new Date(today); limit.setDate(limit.getDate() + 30);
+    return races.map((race) => ({ race, startsAt: raceStartDate(race) })).filter((entry): entry is { race: Race; startsAt: Date } => entry.startsAt !== null && entry.startsAt >= today && entry.startsAt <= limit).sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
+  }, [races]);
+  const filteredRaces = upcomingRaces.filter(({ race }) => series === 'ALL' || race.series === series);
+  const calendarDays = useMemo(() => {
+    const today = startOfDay(new Date());
+    const limit = new Date(today); limit.setDate(limit.getDate() + 30);
+    const first = new Date(today); first.setDate(first.getDate() - ((first.getDay() + 6) % 7));
+    const last = new Date(limit); last.setDate(last.getDate() + (6 - ((last.getDay() + 6) % 7)));
+    const days: Date[] = [];
+    for (const cursor = new Date(first); cursor <= last; cursor.setDate(cursor.getDate() + 1)) days.push(new Date(cursor));
+    return { today, limit, days };
+  }, []);
   const bestLap = useMemo(() => [...laps.filter((lap) => lap.circuit === 'Spa-Francorchamps' && lap.car === 'Ferrari 499P')].sort((a, b) => parseTime(a.time) - parseTime(b.time))[0], [laps]);
   function saveLap(formData: FormData) {
     const newLap: Lap = { id: Date.now(), circuit: String(formData.get('circuit')), car: String(formData.get('car')), game: String(formData.get('game')), time: String(formData.get('time')), date: new Date().toLocaleDateString('ko-KR'), note: String(formData.get('note') || '주행 조건 미입력') };
@@ -42,7 +65,7 @@ export default function Home() {
   return <main>
     <nav className="topbar"><a className="brand" href="#top" aria-label="Race Weekend Prep 홈"><span>RACE WEEKEND</span> PREP</a><div className="navlinks"><a href="#calendar">캘린더</a><a href="#circuit">서킷</a><a href="#laps">내 기록</a></div><button className="profile" onClick={() => setIsFormOpen(true)}><Plus size={15} /> 랩타임 추가</button></nav>
     <section id="top" className="hero"><img src="/spa-hero.png" alt="숲을 가로지르는 레이스 서킷" /><div className="hero-shade" /><div className="hero-content"><p className="eyebrow"><span className="live-dot" /> 2026 SEASON · KST</p><h1>RACE WEEKEND,<br /><em>PREP YOUR LAP.</em></h1><p className="hero-copy">F1과 WEC의 순간을 앞두고,<br />당신의 가장 빠른 랩으로 먼저 준비하세요.</p><div className="next-race"><span className="series-pill">F1</span><div><b>ITALIAN GRAND PRIX</b><small>MONZA · 6 SEP, 22:00</small></div><ChevronRight size={20} /></div></div><div className="hero-stats"><div><strong>07</strong><span>DAYS TO GO</span></div><div><strong>2:18.642</strong><span>SPA PERSONAL BEST</span></div></div></section>
-    <section id="calendar" className="section calendar-section"><div className="section-heading"><div><p className="eyebrow dark"><CalendarDays size={14} /> RACE CALENDAR</p><h2>다가오는 레이스</h2><p className="sync-status">{calendarStatus} · 연 1회 자동 가져오기</p></div><div className="filter" aria-label="시리즈 필터">{(['ALL', 'F1', 'WEC'] as const).map((item) => <button key={item} className={series === item ? 'selected' : ''} onClick={() => setSeries(item)}>{item === 'ALL' ? '전체' : item}</button>)}</div></div><div className="race-grid">{filteredRaces.map((race) => <article className="race-card" key={race.series + race.name}><div className="race-date"><span>{race.date}</span><strong>{race.day}</strong></div><div className="race-info"><span className={race.accent === 'red' ? 'badge red' : 'badge gold'}>{race.series}</span><h3>{race.name}</h3><p><MapPin size={14} /> {race.circuit}, {race.country}</p></div><div className="race-time"><Clock3 size={15} /><span>RACE · KST</span><b>{race.time}</b></div></article>)}</div></section>
+    <section id="calendar" className="section calendar-section"><div className="section-heading"><div><p className="eyebrow dark"><CalendarDays size={14} /> RACE CALENDAR</p><h2>다가오는 30일</h2><p className="sync-status">{calendarStatus} · KST 기준 · {filteredRaces.length}개 레이스</p></div><div className="filter" aria-label="시리즈 필터">{(['ALL', 'F1', 'WEC'] as const).map((item) => <button key={item} className={series === item ? 'selected' : ''} onClick={() => setSeries(item)}>{item === 'ALL' ? '전체' : item}</button>)}</div></div><div className="calendar-frame"><div className="calendar-range"><b>{calendarDays.today.toLocaleDateString('en-US', { month: 'long' })}</b><span>{calendarDays.today.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' })} — {calendarDays.limit.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' })}</span></div><div className="calendar-weekdays">{weekdayLabels.map((day) => <span key={day}>{day}</span>)}</div><div className="month-grid">{calendarDays.days.map((day) => { const events = filteredRaces.filter(({ startsAt }) => dateKey(startsAt) === dateKey(day)); const isToday = dateKey(day) === dateKey(calendarDays.today); const isInRange = day >= calendarDays.today && day <= calendarDays.limit; return <div className={'calendar-day' + (isToday ? ' today' : '') + (!isInRange ? ' outside-range' : '')} key={dateKey(day)}><time dateTime={dateKey(day)}>{day.getDate()}</time>{events.map(({ race }) => <div className={'calendar-event ' + race.accent} key={race.series + race.name}><span>{race.series}</span><b>{race.name.replace(' Grand Prix', ' GP')}</b><small>{race.time === 'TBA' ? '시간 추후 확정' : race.time + ' KST'}</small></div>)}</div>; })}</div></div>{filteredRaces.length === 0 && <p className="calendar-empty">향후 30일 안에 예정된 {series === 'ALL' ? '' : series + ' '}레이스가 없습니다.</p>}</section>
     <section id="circuit" className="section circuit-section"><div className="circuit-copy"><p className="eyebrow dark"><Flag size={14} /> FEATURED CIRCUIT</p><h2>Spa-<br />Francorchamps</h2><p>아르덴 숲을 가로지르는 7.004km. 고저차와 빠른 코너가 만들어내는, 레이싱의 가장 순수한 리듬.</p><div className="track-metrics"><div><b>7.004</b><span>KM LENGTH</span></div><div><b>19</b><span>CORNERS</span></div><div><b>102m</b><span>ELEVATION</span></div></div><button className="text-button">서킷 프로필 보기 <ChevronRight size={16} /></button></div><div className="track-panel"><div className="track-glow" /><div className="track-line"><span className="t1">01</span><span className="t2">07</span><span className="t3">12</span><span className="t4">18</span></div><p>SPA-FRANCORCHAMPS · BELGIUM</p></div></section>
     <section id="laps" className="section lap-section"><div className="section-heading"><div><p className="eyebrow dark"><TimerReset size={14} /> SIM RACING LOG</p><h2>나의 랩타임</h2></div><button className="dark-button" onClick={() => setIsFormOpen(true)}><Plus size={16} /> 기록 추가</button></div><div className="lap-layout"><div className="pb-card"><div className="pb-top"><span>PERSONAL BEST</span><Trophy size={20} /></div><h3>{bestLap?.time ?? '—'}</h3><p>SPA-FRANCORCHAMPS · FERRARI 499P</p><div className="pb-footer"><span><Gauge size={14} /> LMU · DRY</span><span className="improvement">▲ 0.462</span></div></div><div className="lap-list">{laps.slice(0, 4).map((lap, index) => <article className="lap-row" key={lap.id}><span className="rank">{String(index + 1).padStart(2, '0')}</span><div><b>{lap.circuit}</b><p>{lap.car} · {lap.game}</p></div><div className="lap-time"><strong>{lap.time}</strong><small>{lap.date}</small></div></article>)}</div></div></section>
     <footer>RACE WEEKEND PREP <span>PREP THE TRACK. OWN THE WEEKEND.</span></footer>
