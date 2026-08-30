@@ -96,7 +96,7 @@ function parseF1(html: string): F1ScheduleRace[] {
       country,
       time: 'TBA',
       accent: 'red',
-      sourceUrl: F1_SOURCE,
+      sourceUrl: F1_SOURCE + '/' + slug,
       scheduleUrl: F1_SOURCE + '/' + slug,
       scheduleSlug: slug,
     }];
