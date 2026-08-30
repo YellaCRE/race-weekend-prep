@@ -17,7 +17,7 @@ export default function RaceDetailPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/calendar').then((response) => response.json()).then((payload: CalendarPayload) => setRaces(payload.races)).finally(() => setLoading(false));
+    fetch('/api/calendar', { cache: 'no-store' }).then((response) => response.json()).then((payload: CalendarPayload) => setRaces(payload.races)).finally(() => setLoading(false));
   }, []);
 
   const race = useMemo(() => races.find((entry) => slugify(entry.name) === params.slug), [params.slug, races]);
