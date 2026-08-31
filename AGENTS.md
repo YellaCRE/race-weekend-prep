@@ -1,5 +1,5 @@
-# 프로젝트 작업 지침
+# Project Guidelines
 
-1. 모든 사용자 응답은 한국어로 작성한다.
-2. 변경 작업은 커밋까지만 진행한다. 원격 저장소에 `push`하기 전에는 반드시 사용자에게 확인을 받는다.
-3. 커밋 메시지는 한국어로 작성한다.
+1. Respond to all users in Korean.
+2. For change requests, only proceed as far as creating a commit. Always obtain the user's confirmation before pushing to a remote repository.
+3. Write commit messages in Korean.
