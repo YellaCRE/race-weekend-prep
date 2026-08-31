@@ -1,6 +1,10 @@
 import { env } from 'cloudflare:workers';
 import { calendarSchema } from '@/db/schema';
-import type { CalendarPayload, CalendarSession, Race } from '@/lib/calendar-sync';
+import type {
+  CalendarPayload,
+  CalendarSession,
+  Race,
+} from '@/lib/calendar-sync';
 
 const SEASON = 2026;
 let initialized = false;
@@ -27,11 +31,13 @@ type SessionRow = {
 };
 
 async function getDatabase() {
-  const database = env.DB as D1Database | undefined;
+  const database = (env as typeof env & { DB?: D1Database }).DB;
   if (!database) return null;
 
   if (!initialized) {
-    await database.batch(calendarSchema.map((statement) => database.prepare(statement)));
+    await database.batch(
+      calendarSchema.map((statement) => database.prepare(statement)),
+    );
     initialized = true;
   }
 
@@ -42,19 +48,29 @@ export async function readStoredCalendar(): Promise<CalendarPayload | null> {
   const database = await getDatabase();
   if (!database) return null;
 
-  const result = await database.prepare(
-    'SELECT id, series, date_label, race_day, name, circuit, country, race_time, accent, source_url, synced_at FROM calendar_races WHERE season = ? ORDER BY sort_order ASC',
-  ).bind(SEASON).all<RaceRow>();
+  const result = await database
+    .prepare(
+      'SELECT id, series, date_label, race_day, name, circuit, country, race_time, accent, source_url, synced_at FROM calendar_races WHERE season = ? ORDER BY sort_order ASC',
+    )
+    .bind(SEASON)
+    .all<RaceRow>();
   const rows = result.results ?? [];
   if (rows.length === 0) return null;
 
-  const sessionResult = await database.prepare(
-    'SELECT race_id, session_name, starts_at, time_label FROM calendar_sessions WHERE season = ? ORDER BY starts_at ASC',
-  ).bind(SEASON).all<SessionRow>();
+  const sessionResult = await database
+    .prepare(
+      'SELECT race_id, session_name, starts_at, time_label FROM calendar_sessions WHERE season = ? ORDER BY starts_at ASC',
+    )
+    .bind(SEASON)
+    .all<SessionRow>();
   const sessionsByRace = new Map<string, CalendarSession[]>();
   for (const session of sessionResult.results ?? []) {
     const entries = sessionsByRace.get(session.race_id) ?? [];
-    entries.push({ name: session.session_name, startsAt: session.starts_at, time: session.time_label });
+    entries.push({
+      name: session.session_name,
+      startsAt: session.starts_at,
+      time: session.time_label,
+    });
     sessionsByRace.set(session.race_id, entries);
   }
 
@@ -70,11 +86,19 @@ export async function readStoredCalendar(): Promise<CalendarPayload | null> {
     sourceUrl: row.source_url,
     sessions: sessionsByRace.get(row.id) ?? [],
   }));
-  const latestSync = rows.reduce((latest, row) => row.synced_at > latest ? row.synced_at : latest, rows[0].synced_at);
+  const latestSync = rows.reduce(
+    (latest, row) => (row.synced_at > latest ? row.synced_at : latest),
+    rows[0].synced_at,
+  );
   const f1 = rows.find((row) => row.series === 'F1')?.source_url ?? '';
   const wec = rows.find((row) => row.series === 'WEC')?.source_url ?? '';
 
-  return { races, updatedAt: latestSync, sources: { F1: f1, WEC: wec }, mode: 'official-sync' };
+  return {
+    races,
+    updatedAt: latestSync,
+    sources: { F1: f1, WEC: wec },
+    mode: 'official-sync',
+  };
 }
 
 export async function saveCalendar(payload: CalendarPayload): Promise<void> {
@@ -82,30 +106,56 @@ export async function saveCalendar(payload: CalendarPayload): Promise<void> {
   const database = await getDatabase();
   if (!database) return;
 
-  const clearSessions = database.prepare('DELETE FROM calendar_sessions WHERE season = ?').bind(SEASON);
-  const clearRaces = database.prepare('DELETE FROM calendar_races WHERE season = ?').bind(SEASON);
-  const raceId = (index: number, race: Race) => race.series + '-' + SEASON + '-' + index;
-  const entries = payload.races.map((race, index) => database.prepare(
-    'INSERT INTO calendar_races (id, season, sort_order, series, date_label, race_day, name, circuit, country, race_time, accent, source_url, synced_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-  ).bind(
-    raceId(index, race),
-    SEASON,
-    index,
-    race.series,
-    race.date,
-    race.day,
-    race.name,
-    race.circuit,
-    race.country,
-    race.time,
-    race.accent,
-    race.sourceUrl,
-    payload.updatedAt,
-  ));
-  const sessionEntries = payload.races.flatMap((race, index) => (race.sessions ?? []).map((session) => database.prepare(
-    'INSERT INTO calendar_sessions (race_id, season, session_name, starts_at, time_label) VALUES (?, ?, ?, ?, ?)',
-  ).bind(raceId(index, race), SEASON, session.name, session.startsAt, session.time)));
-  await database.batch([clearSessions, clearRaces, ...entries, ...sessionEntries]);
+  const clearSessions = database
+    .prepare('DELETE FROM calendar_sessions WHERE season = ?')
+    .bind(SEASON);
+  const clearRaces = database
+    .prepare('DELETE FROM calendar_races WHERE season = ?')
+    .bind(SEASON);
+  const raceId = (index: number, race: Race) =>
+    race.series + '-' + SEASON + '-' + index;
+  const entries = payload.races.map((race, index) =>
+    database
+      .prepare(
+        'INSERT INTO calendar_races (id, season, sort_order, series, date_label, race_day, name, circuit, country, race_time, accent, source_url, synced_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      )
+      .bind(
+        raceId(index, race),
+        SEASON,
+        index,
+        race.series,
+        race.date,
+        race.day,
+        race.name,
+        race.circuit,
+        race.country,
+        race.time,
+        race.accent,
+        race.sourceUrl,
+        payload.updatedAt,
+      ),
+  );
+  const sessionEntries = payload.races.flatMap((race, index) =>
+    (race.sessions ?? []).map((session) =>
+      database
+        .prepare(
+          'INSERT INTO calendar_sessions (race_id, season, session_name, starts_at, time_label) VALUES (?, ?, ?, ?, ?)',
+        )
+        .bind(
+          raceId(index, race),
+          SEASON,
+          session.name,
+          session.startsAt,
+          session.time,
+        ),
+    ),
+  );
+  await database.batch([
+    clearSessions,
+    clearRaces,
+    ...entries,
+    ...sessionEntries,
+  ]);
 }
 
 export function shouldRefreshCalendar(updatedAt: string): boolean {
