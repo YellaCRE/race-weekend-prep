@@ -12,3 +12,4 @@
 .detail-schedule .session-list{display:block;overflow:hidden}.detail-schedule .session-list:before{content:none}.detail-schedule .session-timeline{position:relative;display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:12px}.detail-schedule .session-timeline:before{content:'';position:absolute;top:64px;left:0;right:0;height:2px;background:var(--line)}@media(max-width:720px){.detail-schedule .session-list{overflow-x:auto}.detail-schedule .session-timeline{grid-auto-columns:112px;grid-auto-flow:column;grid-template-columns:none;min-width:max-content}.detail-schedule .session-timeline:before{left:56px;right:56px}}
 @media(max-width:720px){.detail-topbar .brand span{display:inline}}
 .next-race{color:#fff;text-decoration:none}
+.series-pill.gold{background:#e6b92e;color:#211900}
